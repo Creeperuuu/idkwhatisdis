@@ -1,0 +1,199 @@
+package com.acivev
+
+import android.content.Context
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import com.acivev.utils.VibrationSupport
+import com.acivev.utils.VibratorCheckUtils
+import ru.nsu.ccfit.zuev.osu.Config
+
+/**
+ * Manage vibration effects for Android 7+.
+ * It supports different vibration patterns and intensities.
+ * - Vibration intensity can be set dynamically.
+ */
+object VibratorManager {
+
+    private val SLIDER_VIBRATION_PATTERN = longArrayOf(0, 30, 20, 50) // Time intervals for slider vibration
+    private val SPINNER_VIBRATION_PATTERN = longArrayOf(0, 20, 10, 30) // Time intervals for spinner vibration
+
+    private var vibrator: Vibrator? = null
+    private var hasVibrationSupport = false
+
+    /**
+     * Whether vibration for circles is enabled.
+     */
+    var isCircleVibrationEnabled = false
+        set(value) {
+            field = value
+            Config.setBoolean("vibrationCircle", value)
+        }
+
+    /**
+     * Whether vibration for sliders is enabled.
+     */
+    var isSliderVibrationEnabled = false
+        set(value) {
+            field = value
+            Config.setBoolean("vibrationSlider", value)
+        }
+
+    /**
+     * Whether vibration for spinners is enabled.
+     */
+    var isSpinnerVibrationEnabled = false
+        set(value) {
+            field = value
+            Config.setBoolean("vibrationSpinner", value)
+        }
+
+    /**
+     * The intensity of the vibration.
+     */
+    var intensity = 127
+        set(value) {
+            field = value
+            Config.setInt("seekBarVibrateIntensity", value)
+
+            sliderSpinnerAmplitudes[1] = value
+            sliderSpinnerAmplitudes[3] = value
+
+            sliderPatternAmplitudes.fill(value)
+            spinnerPatternAmplitudes.fill(value)
+        }
+
+    // Amplitudes based on intensity
+    private var sliderSpinnerAmplitudes = intArrayOf(0, intensity, 0, intensity)
+    private var sliderPatternAmplitudes = IntArray(SLIDER_VIBRATION_PATTERN.size) { intensity }
+    private var spinnerPatternAmplitudes = IntArray(SPINNER_VIBRATION_PATTERN.size) { intensity }
+
+    /**
+     * Initializes the vibrator and checks supported vibration features.
+     * MUST be called before using any vibration function.
+     */
+    fun init(context: Context) {
+        intensity = Config.getInt("seekBarVibrateIntensity", intensity)
+        isCircleVibrationEnabled = Config.getBoolean("vibrationCircle", isCircleVibrationEnabled)
+        isSliderVibrationEnabled = Config.getBoolean("vibrationSlider", isSliderVibrationEnabled)
+        isSpinnerVibrationEnabled = Config.getBoolean("vibrationSpinner", isSpinnerVibrationEnabled)
+
+        vibrator = VibratorCheckUtils.getVibrator(context)
+        hasVibrationSupport = VibratorCheckUtils.checkVibratorSupport(context) != VibrationSupport.NO_VIBRATION
+    }
+
+    /**
+     * Cancels any ongoing vibration.
+     */
+    fun cancel() { vibrator?.cancel() }
+
+    /**
+     * Vibrates for a given duration with intensity.
+     * @param milliseconds The number of milliseconds to vibrate.
+     */
+    fun vibrateFor(milliseconds: Long) {
+        if (isCircleVibrationEnabled || isSliderVibrationEnabled || isSpinnerVibrationEnabled) {
+            if (!hasVibrationSupport || vibrator == null) {
+                return
+            }
+
+            cancel()
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator?.vibrate(VibrationEffect.createOneShot(milliseconds, intensity)) // Amplitudes based on intensity
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(milliseconds)
+            }
+        }
+    }
+
+    /**
+     * Vibrates with a pattern and intensities.
+     * @param pattern an array of longs of times for which to turn the vibrator on or off.
+     * @param amplitudes the amplitude values.
+     * @param repeat the index into pattern at which to repeat, or -1 if you don't want to repeat.
+     */
+    fun vibrateFor(pattern: LongArray, amplitudes: IntArray, repeat: Int = -1) {
+        if (isCircleVibrationEnabled || isSliderVibrationEnabled || isSpinnerVibrationEnabled) {
+            if (!hasVibrationSupport || vibrator == null) {
+                return
+            }
+
+            cancel()
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator?.vibrate(VibrationEffect.createWaveform(pattern, amplitudes, repeat))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(pattern, repeat)
+            }
+        }
+    }
+
+
+    /**
+     * Provides haptic vibration for a click action using intensity.
+     */
+    fun circleVibration() {
+        if (isCircleVibrationEnabled) {
+            if (!hasVibrationSupport || vibrator == null) {
+                return
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                cancel()
+                vibrator?.vibrate(VibrationEffect.createOneShot(30, intensity)) // Amplitudes based on intensity
+            } else {
+                // Fallback for older APIs
+                vibrateFor(50)
+            }
+        }
+    }
+
+    /**
+     * Provides haptic vibration for a slider or scroll action using intensity.
+     */
+    fun sliderVibration() {
+        if (isSliderVibrationEnabled) {
+            if (!hasVibrationSupport || vibrator == null) {
+                return
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                cancel()
+                vibrator?.vibrate(
+                    VibrationEffect.createWaveform(
+                        SLIDER_VIBRATION_PATTERN, sliderSpinnerAmplitudes, -1
+                    )
+                )
+            } else {
+                // Fallback for older APIs
+                vibrateFor(SLIDER_VIBRATION_PATTERN, sliderPatternAmplitudes)
+            }
+        }
+    }
+
+    /**
+     * Provides haptic vibration for a spinner using intensity.
+     */
+    fun spinnerVibration() {
+        if (isSpinnerVibrationEnabled) {
+            if (!hasVibrationSupport || vibrator == null) {
+                return
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                cancel()
+                vibrator?.vibrate(
+                    VibrationEffect.createWaveform(
+                        SPINNER_VIBRATION_PATTERN, sliderSpinnerAmplitudes, -1
+                    )
+                )
+            } else {
+                // Fallback for older APIs
+                vibrateFor(SPINNER_VIBRATION_PATTERN, spinnerPatternAmplitudes)
+            }
+        }
+    }
+}
