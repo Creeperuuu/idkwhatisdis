@@ -90,6 +90,9 @@ public class CursorTrail extends Entity {
         lastInputY = y;
         lastMidX = midX;
         lastMidY = midY;
+
+        float distMoved = (float) Math.hypot(x - lastInputX, y - lastInputY);
+        if (distMoved < 0.05f) return; // Don't process if the cursor barely moved
     }
 
     private void pushPoint(float x, float y) {
@@ -102,35 +105,53 @@ public class CursorTrail extends Entity {
 
     // Midpoint Quadratic Bezier Curve Smoothing
     private void fillPathBezier(float x0, float y0, float cx, float cy, float x1, float y1) {
-        // We use a higher sampling rate to find the actual length of the curve
-        int samples = 10;
+        int samples = 20; // Increased samples for smoother length estimation
+        float[] tx = new float[samples + 1];
+        float[] ty = new float[samples + 1];
+        float[] dists = new float[samples + 1];
         float totalPathLength = 0;
-        float prevX = x0, prevY = y0;
+
+        // 1. Pre-calculate the points and the cumulative distance along the curve
+        tx[0] = x0;
+        ty[0] = y0;
+        dists[0] = 0;
 
         for (int i = 1; i <= samples; i++) {
             float t = i / (float) samples;
             float u = 1 - t;
-            float qx = (u * u * x0) + (2 * u * t * cx) + (t * t * x1);
-            float qy = (u * u * y0) + (2 * u * t * cy) + (t * t * y1);
-            totalPathLength += (float) Math.hypot(qx - prevX, qy - prevY);
-            prevX = qx;
-            prevY = qy;
+            tx[i] = (u * u * x0) + (2 * u * t * cx) + (t * t * x1);
+            ty[i] = (u * u * y0) + (2 * u * t * cy) + (t * t * y1);
+
+            // Accumulate distance from the previous sample point
+            totalPathLength += (float) Math.hypot(tx[i] - tx[i - 1], ty[i] - ty[i - 1]);
+            dists[i] = totalPathLength;
         }
 
-        // Use the remainder from the last frame to start the first point correctly
+        // 2. Walk the curve using the TRAIL_STEP_SIZE and the distanceRemainder
+        // 'd' is the distance along the curve where the NEXT point should be
         float d = TRAIL_STEP_SIZE - distanceRemainder;
 
+        int sampleIdx = 0;
         while (d <= totalPathLength) {
-            float t = d / totalPathLength;
-            float u = 1 - t;
-            float qx = (u * u * x0) + (2 * u * t * cx) + (t * t * x1);
-            float qy = (u * u * y0) + (2 * u * t * cy) + (t * t * y1);
+            // Find which sample segment 'd' falls into
+            while (sampleIdx < samples && dists[sampleIdx + 1] < d) {
+                sampleIdx++;
+            }
+
+            // Interpolate within the sample segment for higher precision
+            float segStartDist = dists[sampleIdx];
+            float segEndDist = dists[sampleIdx + 1];
+            float segRatio = (d - segStartDist) / (segEndDist - segStartDist);
+
+            float qx = tx[sampleIdx] + (tx[sampleIdx + 1] - tx[sampleIdx]) * segRatio;
+            float qy = ty[sampleIdx] + (ty[sampleIdx + 1] - ty[sampleIdx]) * segRatio;
 
             pushPoint(qx, qy);
             d += TRAIL_STEP_SIZE;
         }
 
-        // Save the leftover distance so the next segment starts at the right spot
+        // 3. Update the remainder for the next segment call
+        // We subtract the distance traveled to the last pushed point from the total
         distanceRemainder = totalPathLength - (d - TRAIL_STEP_SIZE);
     }
 
