@@ -8,6 +8,7 @@ import com.reco1l.andengine.shape.UITriangleMesh;
 import com.reco1l.andengine.container.UIContainer;
 import com.reco1l.framework.Color4;
 import com.rian.osu.math.Vector2;
+import org.anddev.andengine.opengl.texture.region.TextureRegion;
 
 
 public class SliderBody extends UIContainer {
@@ -108,6 +109,12 @@ public class SliderBody extends UIContainer {
 
     public void setHintWidth(float value) {
         hintWidth = value;
+    }
+
+    public void setHintTexture(TextureRegion textureRegion) {
+        if (hint != null) {
+            hint.setTextureRegion(textureRegion);
+        }
     }
 
     public void setHintColor(float r, float g, float b, float a) {
