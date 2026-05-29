@@ -14,10 +14,10 @@ import ru.nsu.ccfit.zuev.skins.OsuSkin;
 public class CursorTrail extends Entity {
 
     private static final int TRAIL_CAPACITY = 2048;
-    private static final float TRAIL_LIFETIME = 1.0f;
-    private static final float MAX_OPACITY = 0.4f;
-    private static final float FADE_DURATION_RATIO = 0.6f;
-    private static final float SCALE_DURATION_RATIO = 1.6f;
+    private static final float TRAIL_LIFETIME = 0.4f;
+    private static final float MAX_OPACITY = 1.0f;
+    private static final float FADE_DURATION_RATIO = 1.0f;
+    private static final float SCALE_DURATION_RATIO = 128.0f;
     private static final float TRAIL_STEP_SIZE = 2.2f;
 
     private final StampSprite stamp;
@@ -26,14 +26,6 @@ public class CursorTrail extends Entity {
     private final float[] px = new float[TRAIL_CAPACITY];
     private final float[] py = new float[TRAIL_CAPACITY];
     private final float[] pTime = new float[TRAIL_CAPACITY];
-    // Add this inside the CursorTrail class
-    private static final float[][] PASTEL_COLORS = {
-            {0.98f, 0.75f, 0.75f}, // Pastel Red
-            {0.98f, 0.90f, 0.75f}, // Pastel Yellow
-            {0.75f, 0.98f, 0.75f}, // Pastel Green
-            {0.75f, 0.90f, 0.98f}, // Pastel Blue
-            {0.85f, 0.75f, 0.98f} // Pastel Purple
-    };
 
     private int head = 0;
     private int count = 0;
@@ -100,7 +92,7 @@ public class CursorTrail extends Entity {
         lastMidY = midY;
 
         float distMoved = (float) Math.hypot(x - lastInputX, y - lastInputY);
-        if (distMoved < 0.05f) return; // Don't process if the cursor barely moved
+        if (distMoved < 0.15f) return; // Don't process if the cursor barely moved
     }
 
     private void pushPoint(float x, float y) {
@@ -165,22 +157,32 @@ public class CursorTrail extends Entity {
 
     @Override
     protected void onManagedDraw(GL10 pGL, Camera pCamera) {
+        // [FREEZE FIX] Constantly tick the clock forward during the draw loop
+        // 0.016f represents roughly 60 FPS (1 second / 60 frames)
         currentTime += 0.016f * GameHelper.getSpeedMultiplier();
+
         if (count == 0) return;
 
         float currentLifetime = TRAIL_LIFETIME * GameHelper.getSpeedMultiplier();
 
+        if (OsuSkin.get().isRotateCursorTrail()) {
+            stamp.setRotation(cursor.getRotation());
+        } else {
+            stamp.setRotation(0f);
+        }
+
+        int newCount = 0;
         for (int i = 0; i < count; i++) {
             int idx = (head - 1 - i);
             if (idx < 0) idx += TRAIL_CAPACITY;
 
             float age = currentTime - pTime[idx];
-            if (age > currentLifetime) break;
 
-            // Calculate gradient color
-            float progress = age / currentLifetime; // 0.0 to 1.0
-            float[] color = getPastelGradient(progress);
-            stamp.setColor(color[0], color[1], color[2]);
+            // Once we reach a particle that is too old, we can stop evaluating older ones
+            if (age > currentLifetime) {
+                break;
+            }
+            newCount++;
 
             float fadeLifeRatio = Math.max(0f, 1f - (age / (currentLifetime * FADE_DURATION_RATIO)));
             float scaleLifeRatio = Math.max(0f, 1f - (age / (currentLifetime * SCALE_DURATION_RATIO)));
@@ -191,24 +193,9 @@ public class CursorTrail extends Entity {
 
             stamp.drawNow(pGL, pCamera);
         }
-    }
 
-    private float[] getPastelGradient(float progress) {
-        // Maps progress (0 to 1) to the colors array
-        float scaled = progress * (PASTEL_COLORS.length - 1);
-        int index = (int) scaled;
-        float lerp = scaled - index;
-
-        if (index >= PASTEL_COLORS.length - 1) return PASTEL_COLORS[PASTEL_COLORS.length - 1];
-
-        float[] c1 = PASTEL_COLORS[index];
-        float[] c2 = PASTEL_COLORS[index + 1];
-
-        return new float[]{
-                c1[0] + (c2[0] - c1[0]) * lerp,
-                c1[1] + (c2[1] - c1[1]) * lerp,
-                c1[2] + (c2[2] - c1[2]) * lerp
-        };
+        // Update count so old points are pruned from the render cycle
+        this.count = newCount;
     }
 
     private static class StampSprite extends Sprite {
@@ -220,4 +207,4 @@ public class CursorTrail extends Entity {
             super.onManagedDraw(pGL, pCamera);
         }
     }
-        }
+    }
