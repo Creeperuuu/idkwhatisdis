@@ -390,9 +390,6 @@ public class GameplaySlider extends GameObject {
         if (OsuSkin.get().isSliderHintEnable() && beatmapSlider.getDistance() > OsuSkin.get().getSliderHintShowMinLength()) {
             sliderBody.setHintVisible(true);
             sliderBody.setHintWidth(OsuSkin.get().getSliderHintWidth() * scale);
-            
-            // Set the slider hint texture
-            sliderBody.setHintTexture(ResourceManager.getInstance().getTexture("slidertrack"));
 
             Color4 hintColor = OsuSkin.get().getSliderHintColor();
             if (hintColor != null) {
